@@ -29,6 +29,7 @@
   <select id="part"></select>
   <span class="tc" id="tc">00:00.0</span>
   <button id="sz">A±</button>
+  <button id="play" class="stop">▶ Écouter</button>
   <button id="go" class="rec">● REC</button>
   <button id="stop" class="stop" hidden>■ STOP</button>
   <button id="reset" class="stop">↺</button>
@@ -45,7 +46,7 @@ PARTS.forEach((p,i)=>{ const o=document.createElement('option'); o.value=i; o.te
 function load(i){
   const p=PARTS[i]; W=p.words; au.src=p.audio; cur=-1;
   txt.innerHTML=''; spans=W.map(w=>{ const s=document.createElement('span'); s.textContent=w.w+' '; txt.appendChild(s); return s; });
-  paint(-1); $('save').hidden=true; blob=null;
+  paint(-1); $('save').hidden=true; blob=null; live=false; $('play').textContent='▶ Écouter';
 }
 const idxAt=t=>{ let i=-1; while(i+1<W.length && W[i+1].s<=t) i++; return i; };
 function paint(i){
@@ -77,20 +78,23 @@ async function start(){
   const mime=['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].find(m=>window.MediaRecorder&&MediaRecorder.isTypeSupported(m))||'';
   chunks=[]; rec=new MediaRecorder(stream, mime?{mimeType:mime,videoBitsPerSecond:8e6}:{videoBitsPerSecond:8e6});
   rec.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
-  rec.onstop=()=>{ live=false; blob=new Blob(chunks,{type:rec.mimeType||'video/mp4'}); $('save').hidden=false; $('go').hidden=false; $('stop').hidden=true; sel.hidden=false; msg.textContent='Prise terminée : '+(blob.size/1e6).toFixed(1)+' Mo. Enregistrer → Photos ou Fichiers.'; };
+  rec.onstop=()=>{ live=false; blob=new Blob(chunks,{type:rec.mimeType||'video/mp4'}); $('save').hidden=false; $('go').hidden=$('play').hidden=false; $('stop').hidden=true; sel.hidden=false; msg.textContent='Prise terminée : '+(blob.size/1e6).toFixed(1)+' Mo. Enregistrer → Photos ou Fichiers.'; };
   rec.start(1000); t0=performance.now();
-  $('go').hidden=true; $('stop').hidden=false; sel.hidden=true;
+  $('go').hidden=$('play').hidden=true; $('stop').hidden=false; sel.hidden=true;
   count.hidden=false;
   for(const n of [3,2,1]){ count.textContent=n; beep(n===1?1320:880,.12); await sleep(1000); }
   count.textContent='GO'; count.style.color='#1F9D55'; await sleep(LEAD*1000); count.hidden=true; count.style.color='';
   window.__audioStartMs = Math.round(performance.now()-t0);                // décalage voix / début d'enregistrement
   au.currentTime=0; live=true; au.play();
 }
-au.onended = async () => { await sleep(1500); if(rec&&rec.state==='recording') rec.stop(); };
+au.onended = async () => { if(rec&&rec.state==='recording'){ await sleep(1500); rec.stop(); } else { live=false; $('play').textContent='▶ Écouter'; } };
+// écoute seule : texte + voix, sans caméra ni enregistrement — pour répéter avant la prise
+$('play').onclick=async()=>{ if(live){ au.pause(); live=false; $('play').textContent='▶ Écouter'; return; }
+  au.currentTime=0; live=true; $('play').textContent='■ Stop'; await au.play(); };
 $('stop').onclick=()=>{ au.pause(); if(rec&&rec.state==='recording') rec.stop(); };
-$('reset').onclick=()=>{ live=false; au.pause(); au.currentTime=0; cur=-2; paint(-1); count.hidden=true;
+$('reset').onclick=()=>{ live=false; au.pause(); $('play').textContent='▶ Écouter'; au.currentTime=0; cur=-2; paint(-1); count.hidden=true;
   if(rec&&rec.state==='recording'){ rec.onstop=null; rec.stop(); } blob=null; chunks=[];
-  $('save').hidden=true; $('stop').hidden=true; $('go').hidden=false; sel.hidden=false; msg.textContent=''; };
+  $('save').hidden=true; $('stop').hidden=true; $('go').hidden=$('play').hidden=false; sel.hidden=false; msg.textContent=''; };
 $('go').onclick=start;
 $('save').onclick=async()=>{
   const ext=(rec.mimeType||'').includes('mp4')?'mp4':'webm';
@@ -103,6 +107,6 @@ $('save').onclick=async()=>{
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
 };
 $('sz').onclick=()=>{ const s=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--size'))||27; document.documentElement.style.setProperty('--size',(s>=36?22:s+3)+'px'); };
-sel.onchange=()=>{ load(+sel.value); $('go').hidden=false; $('stop').hidden=true; sel.hidden=false; };
+sel.onchange=()=>{ load(+sel.value); $('go').hidden=$('play').hidden=false; $('stop').hidden=true; sel.hidden=false; };
 load(0); cam();
 </script></body></html>
